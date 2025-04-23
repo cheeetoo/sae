@@ -1,9 +1,12 @@
 import datasets
 from einops import rearrange
 import transformer_lens
+import transformer_lens.utils as utils
 import torch
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+LAYER = 13
 
 model = transformer_lens.HookedTransformer.from_pretrained(
     "google/gemma-2-2b", device=device
@@ -11,31 +14,35 @@ model = transformer_lens.HookedTransformer.from_pretrained(
 model.eval()
 model.compile()
 
-
-def map_fn(batch, model=model):
-    toks = model.to_tokens(batch["text"])
-
-    with torch.no_grad():
-        _, cache = model.run_with_cache(toks)
-        acts = cache["resid_post", 13].squeeze(0).cpu()
-
-    return acts
-
-
 print("Loading dataset...")
 dataset = datasets.load_dataset("NeelNanda/pile-10k")
 
 print("Getting activations...")
+acts = []
+
+
+def map_fn(batch, model):
+    def hook(x, _):
+        act = rearrange(x.clone().cpu(), "b t d -> (b t) d")
+        acts.append(act)
+
+    toks = model.to_tokens(batch["text"]).to(device)
+
+    with torch.no_grad():
+        model.run_with_hooks(
+            toks,
+            fwd_hooks=[
+                (utils.get_act_name("resid_post", LAYER), hook),
+            ],
+        )
+
+
 dataset = dataset.map(
-    map_fn,
-    batched=True,
-    batch_size=256,
-    fn_kwargs={"model": model},
+    map_fn, batched=True, batch_size=1, fn_kwargs={"model": model}, num_proc=1
 )
 
 print("Preparing dataset...")
-acts = torch.cat(dataset, dim=0)  # type: ignore
-acts = rearrange(acts, "b t d -> (b t) d")
+acts = torch.cat(acts, dim=0)  # type: ignore
 
 n = acts.shape[1]
 mean_squared_norm = torch.mean(torch.sum(acts**2, dim=1))
