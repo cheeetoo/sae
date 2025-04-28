@@ -34,6 +34,9 @@ def train_sae(
             "learning_rate": learning_rate,
             "lambda_s_final": lambda_s_final,
             "lambda_p": lambda_p,
+            "c": c,
+            "bandwidth": bandwidth,
+            "threshold": threshold,
         },
     )
 

@@ -4,7 +4,13 @@ import transformer_lens
 import transformer_lens.utils as utils
 import torch
 
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+device = (
+    torch.device("cuda")
+    if torch.cuda.is_available()
+    else torch.device("mps")
+    if torch.mps.is_available()
+    else torch.device("cpu")
+)
 
 LAYER = 13
 

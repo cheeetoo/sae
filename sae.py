@@ -84,4 +84,3 @@ class SAE(nn.Module):
         l_p = self.lambda_p * F.relu(torch.exp(self.t) - acts) * wd_norm
         l_p = l_p.sum(-1)
         return l_mse + l_s + l_p
-
