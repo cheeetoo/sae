@@ -21,18 +21,18 @@ model.eval()
 model.compile()
 
 print("Loading dataset...")
-dataset = datasets.load_dataset("NeelNanda/pile-10k")
+dataset = datasets.load_dataset("HuggingfaceFW/fineweb", "sample-10BT")
 
 print("Getting activations...")
 acts = []
 
 
 def map_fn(batch, model):
-    def hook(x, _):
+    def hook(x, hook):
         act = rearrange(x.clone().cpu(), "b t d -> (b t) d")
         acts.append(act)
 
-    toks = model.to_tokens(batch["text"]).to(device)
+    toks = model.to_tokens(batch["text"], truncate=True).to(device)
 
     with torch.no_grad():
         model.run_with_hooks(
@@ -59,5 +59,5 @@ indices = torch.randperm(len(activations_tensor))
 activations_tensor = activations_tensor[indices]
 
 print("Saving dataset...")
-torch.save(activations_tensor, "pile_10k_activations.pt")
+torch.save(activations_tensor, "pile_activations.pt")
 print(f"Dataset saved with {len(activations_tensor)} activation vectors.")
