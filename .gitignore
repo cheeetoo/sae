@@ -9,4 +9,6 @@ wheels/
 # Virtual environments
 .venv
 
+tokenized_fineweb
+
 **/.claude/settings.local.json

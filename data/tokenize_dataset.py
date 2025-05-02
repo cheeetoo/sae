@@ -1,11 +1,13 @@
 from typing import List, Dict
+from pathlib import Path
+import os
 
 import datasets
 from huggingface_hub import HfApi
 from transformers import AutoTokenizer, AutoConfig  # type: ignore
 
 MODEL_NAME = "google/gemma-2-2b"
-LOCAL_DIR = "tokenized_fineweb"
+LOCAL_DIR = Path("tokenized_fineweb")
 REPO_ID = "cheeetoo/fineweb-tokenized-gemma-2"
 DATASET_NAME = "HuggingfaceFW/fineweb"
 DATASET_CONFIG = "sample-10BT"
@@ -53,7 +55,7 @@ print(f"Uploading to the Hugging Face Hub at '{REPO_ID}' …")
 
 api = HfApi()
 
-api.create_repo(repo_id=REPO_ID, repo_type="dataset", exist_ok=True, private=True)
+api.create_repo(repo_id=REPO_ID, repo_type="dataset", exist_ok=True, private=False)
 
 api.upload_folder(
     folder_path=str(LOCAL_DIR),
