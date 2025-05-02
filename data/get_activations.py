@@ -5,51 +5,39 @@ from einops import rearrange
 from tqdm.auto import tqdm
 
 MODEL_NAME = "google/gemma-2-2b"
-DATASET_NAME = "cheeetoo/fineweb-tokenized-gemma-2"
+DATASET_NAME = "HuggingFaceFW/fineweb"
+DATASET_CONFIG = "sample-10BT"
 OUTPUT_FILE = "pile_activations.pt"
 REPO_ID = "cheeetoo/gemma-2-2b-fineweb-l13-acts"
-BS = 8
+BS = 16
 LAYER = 13
 
-device = (
-    "cuda"
-    if torch.cuda.is_available()
-    else "mps"
-    if torch.mps.is_available()
-    else "cpu"
-)
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 print(f"Loading model {MODEL_NAME}")
 model = HookedTransformer.from_pretrained(MODEL_NAME, device=device)
 
 print(f"Loading dataset {DATASET_NAME}")
-dataset = load_dataset(DATASET_NAME)
+dataset = load_dataset(DATASET_NAME, DATASET_CONFIG)
 
-# Create a customized dataloader that properly handles the "input_ids" format
-def collate_fn(batch):
-    # Extract input_ids from each sample
-    input_ids = [item["input_ids"] for item in batch]
-    # Create a batch tensor
-    return {"input_ids": torch.stack(input_ids).to(device)}
 
 dataloader = torch.utils.data.DataLoader(
-    dataset["train"] if "train" in dataset else dataset, 
+    dataset["train"],
     batch_size=BS,
-    collate_fn=collate_fn
 )
 
 acts = []
 
 for batch in tqdm(dataloader):
+
     def hook(x, hook):
         act = rearrange(x.clone().cpu(), "b t d -> (b t) d")
         acts.append(act)
 
     with torch.no_grad():
-        # Use the input_ids from the batch for forward pass
         model.run_with_hooks(
-            batch["input_ids"], 
-            fwd_hooks=[(utils.get_act_name("resid_post", LAYER), hook)]
+            batch["text"],
+            fwd_hooks=[(utils.get_act_name("resid_post", LAYER), hook)],
         )
 
 print("Preparing dataset...")
