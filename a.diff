@@ -1,0 +1,52 @@
+diff --git a/data/get_activations.py b/data/get_activations.py
+index 6f5326b..e59e555 100644
+--- a/data/get_activations.py
++++ b/data/get_activations.py
+@@ -9,20 +9,22 @@ DATASET_NAME = "HuggingFaceFW/fineweb"
+ DATASET_CONFIG = "sample-10BT"
+ OUTPUT_FILE = "pile_activations.pt"
+ REPO_ID = "cheeetoo/gemma-2-2b-fineweb-l13-acts"
+-BS = 16
++BS = 40
+ LAYER = 13
+
+ device = "cuda" if torch.cuda.is_available() else "cpu"
+
+ print(f"Loading model {MODEL_NAME}")
+-model = HookedTransformer.from_pretrained(MODEL_NAME, device=device)
++model = HookedTransformer.from_pretrained(MODEL_NAME, device=device, dtype=torch.bfloat16)
++model.compile()
++model.cfg.n_ctx = model.cfg.n_ctx // 32
+
+-print(f"Loading dataset {DATASET_NAME}")
+-dataset = load_dataset(DATASET_NAME, DATASET_CONFIG)
++print(f"Loading dataset {DATASET_NAME} ({DATASET_CONFIG})")
++dataset = load_dataset(DATASET_NAME, DATASET_CONFIG, split="train[:1%]")
+
+
+ dataloader = torch.utils.data.DataLoader(
+-    dataset["train"],
++    dataset,
+     batch_size=BS,
+ )
+
+@@ -31,14 +33,17 @@ acts = []
+ for batch in tqdm(dataloader):
+
+     def hook(x, hook):
+-        act = rearrange(x.clone().cpu(), "b t d -> (b t) d")
++        act = rearrange(x.detach().to("cpu"), "b t d -> (b t) d")
+         acts.append(act)
+
+     with torch.no_grad():
++        toks = model.to_tokens(batch["text"], truncate=True, prepend_bos=False)
+         model.run_with_hooks(
+-            batch["text"],
++            toks,
+             fwd_hooks=[(utils.get_act_name("resid_post", LAYER), hook)],
++            clear_contexts=True
+         )
++    torch.cuda.empty_cache()
+
+ print("Preparing dataset...")
+ acts = torch.cat(acts, dim=0)
