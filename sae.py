@@ -21,7 +21,7 @@ class JumpReLU(torch.autograd.Function):
     def backward(ctx, grad_output):  # type: ignore
         x, threshold = ctx.saved_tensors
         bandwidth = ctx.bandwidth
-        x_grad = (x > threshold) * grad_output
+        x_grad = grad_output.clone()
         threshold_grad = (
             -(threshold / bandwidth)
             * rectangle((x - threshold) / bandwidth)
@@ -51,14 +51,15 @@ class SAE(nn.Module):
         self.w_e = nn.Parameter((d_model / n_features) * self.w_d.data.T)
 
         self.b_d = nn.Parameter(torch.zeros(d_model))
+        self.b_e = nn.Parameter(torch.empty(n_features))
 
         self.t = nn.Parameter(torch.full((n_features,), threshold))
 
     def init_be(self, batch: Tensor):
         with torch.no_grad():
             acts = einsum(self.w_e, batch, "f d, t d -> t f")
-            quantile_values = torch.quantile(acts.float(), 1 - 10_000 / self.n_features, dim=0)
-            self.b_e = (torch.exp(self.t) - quantile_values).type_as(batch)
+            q = torch.quantile(acts.float(), 1 - 10_000 / self.n_features, dim=0)
+            self.b_e.data = (torch.exp(self.t) - q).type_as(batch)
 
     def encode(self, x: Tensor) -> Tensor:
         acts = einsum(self.w_e, x, "f d, t d -> t f") + self.b_e
@@ -79,10 +80,8 @@ class SAE(nn.Module):
     ) -> Tensor:
         wd_norm = torch.norm(self.w_d, dim=0)
         l_mse = F.mse_loss(x_hat, x)
-        l_s = (lambda_s *
-                torch.tanh(self.c * acts.abs() * wd_norm)
-        ).sum(-1).mean()
-        l_p = (self.lambda_p *
-                F.relu(torch.exp(self.t) - acts) * wd_norm
-        ).sum(-1).mean()
+        l_s = (lambda_s * torch.tanh(self.c * acts.abs() * wd_norm)).sum(-1).mean()
+        l_p = (
+            (self.lambda_p * F.relu(torch.exp(self.t) - acts) * wd_norm).sum(-1).mean()
+        )
         return l_mse + l_s + l_p

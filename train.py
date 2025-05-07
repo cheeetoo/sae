@@ -53,14 +53,18 @@ dataloader = DataLoader(
     num_workers=os.cpu_count() or 1,
 )
 
-model = SAE(
-    d_model=activations.shape[1],
-    n_features=N_FEATURES,
-    bandwidth=BANDWIDTH,
-    threshold=THRESHOLD,
-    lambda_p=LAMBDA_P,
-    c=C,
-).to(device).to(torch.bfloat16)
+model = (
+    SAE(
+        d_model=activations.shape[1],
+        n_features=N_FEATURES,
+        bandwidth=BANDWIDTH,
+        threshold=THRESHOLD,
+        lambda_p=LAMBDA_P,
+        c=C,
+    )
+    .to(device)
+    .to(torch.bfloat16)
+)
 
 init_sample = dataset[:10_000][0].to(device)
 model.init_be(init_sample)
