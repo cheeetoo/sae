@@ -7,7 +7,7 @@ from math import sqrt
 
 
 def rectangle(x: Tensor) -> Tensor:
-    return (x > -0.5) & (x < 0.5).type_as(x)
+    return ((x > -0.5) & (x < 0.5)).type_as(x)
 
 
 class JumpReLU(torch.autograd.Function):
@@ -15,7 +15,7 @@ class JumpReLU(torch.autograd.Function):
     def forward(ctx, x: Tensor, threshold: Tensor, bandwidth: float):
         ctx.save_for_backward(x, threshold)
         ctx.bandwidth = bandwidth
-        return x * (x > threshold)
+        return (x * (x > threshold)).type_as(x)
 
     @staticmethod
     def backward(ctx, grad_output):  # type: ignore
@@ -27,7 +27,7 @@ class JumpReLU(torch.autograd.Function):
             * rectangle((x - threshold) / bandwidth)
             * grad_output
         )
-        return x_grad, threshold_grad, 0
+        return x_grad, threshold_grad, None
 
 
 class SAE(nn.Module):
@@ -56,18 +56,17 @@ class SAE(nn.Module):
 
     def init_be(self, batch: Tensor):
         with torch.no_grad():
-            acts = einsum(self.w_e, batch, "d f, b t d -> b t f")
-            acts = rearrange(acts, "b t f -> (b t) f")
-            quantile_values = torch.quantile(acts, 1 - 10_000 / self.n_features, dim=0)
-            self.b_e = torch.exp(self.t) - quantile_values
+            acts = einsum(self.w_e, batch, "f d, t d -> t f")
+            quantile_values = torch.quantile(acts.float(), 1 - 10_000 / self.n_features, dim=0)
+            self.b_e = (torch.exp(self.t) - quantile_values).type_as(batch)
 
     def encode(self, x: Tensor) -> Tensor:
-        acts = einsum(self.w_e, x, "d f, b t d -> b t f") + self.b_e
+        acts = einsum(self.w_e, x, "f d, t d -> t f") + self.b_e
         acts: Tensor = JumpReLU.apply(acts, torch.exp(self.t), self.bandwidth)  # type: ignore
         return acts
 
     def decode(self, acts: Tensor) -> Tensor:
-        x_hat = einsum(self.w_d, acts, "f d, b t f -> b t d") + self.b_d
+        x_hat = einsum(self.w_d, acts, "d f, t f -> t d") + self.b_d
         return x_hat
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
@@ -78,9 +77,12 @@ class SAE(nn.Module):
     def get_loss(
         self, x: Tensor, x_hat: Tensor, acts: Tensor, lambda_s: float
     ) -> Tensor:
-        wd_norm = torch.norm(self.w_d, dim=1)
+        wd_norm = torch.norm(self.w_d, dim=0)
         l_mse = F.mse_loss(x_hat, x)
-        l_s = lambda_s * torch.tanh(self.c * acts.abs() * wd_norm)
-        l_p = self.lambda_p * F.relu(torch.exp(self.t) - acts) * wd_norm
-        l_p = l_p.sum(-1)
+        l_s = (lambda_s *
+                torch.tanh(self.c * acts.abs() * wd_norm)
+        ).sum(-1).mean()
+        l_p = (self.lambda_p *
+                F.relu(torch.exp(self.t) - acts) * wd_norm
+        ).sum(-1).mean()
         return l_mse + l_s + l_p

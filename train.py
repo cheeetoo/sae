@@ -4,12 +4,12 @@ from torch.utils.data import DataLoader, TensorDataset
 import wandb
 from tqdm import tqdm
 import os
-from datasets import load_dataset
+from huggingface_hub import hf_hub_download
 import numpy as np
 
 from sae import SAE
 
-N_FEATURES = 18_432
+N_FEATURES = 50_000
 BANDWIDTH = 2.0
 THRESHOLD = 0.1
 C = 4.0
@@ -21,6 +21,7 @@ EPOCHS = 10
 GRAD_CLIP = 1.0
 SAVE_PATH = "sae.pt"
 REPO_ID = "cheeetoo/gemma-2-2b-fineweb-l13-acts"
+FILENAME = "activations.pt"
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 print(f"Using device: {device}")
@@ -40,8 +41,8 @@ wandb.init(
 )
 
 print(f"Loading activations from {REPO_ID}")
-hf_dataset = load_dataset(REPO_ID, split="train")
-activations = torch.tensor(np.array(hf_dataset["activations"]), dtype=torch.float32)
+local_path = hf_hub_download(repo_id=REPO_ID, filename=FILENAME, repo_type="dataset")
+activations = torch.load(local_path)
 
 dataset = TensorDataset(activations)
 dataloader = DataLoader(
@@ -59,9 +60,9 @@ model = SAE(
     threshold=THRESHOLD,
     lambda_p=LAMBDA_P,
     c=C,
-).to(device)
+).to(device).to(torch.bfloat16)
 
-init_sample = dataset[:10_000][0].unsqueeze(0).to(device)
+init_sample = dataset[:10_000][0].to(device)
 model.init_be(init_sample)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=(0.9, 0.999))
@@ -131,11 +132,11 @@ for epoch in range(EPOCHS):
         global_step += 1
 
 with torch.no_grad():
-    wd_norm = torch.norm(model.w_d, dim=0, keepdim=True)
+    wd_norm = torch.norm(model.w_d, dim=0)
 
-    model.w_e.data = model.w_e.data * wd_norm
-    model.b_e = model.b_e * wd_norm.squeeze()
-    model.w_d.data = model.w_d.data / wd_norm
+    model.w_e.data *= wd_norm.unsqueeze(1)
+    model.b_e *= wd_norm
+    model.w_d.data /= wd_norm
 
 torch.save(model.state_dict(), SAVE_PATH)
 
