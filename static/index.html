@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAE Stories</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <div class="content-area">
+            <div class="text-area-container">
+                <textarea id="text-input" placeholder="Enter your prompt here..."></textarea>
+                <div class="controls">
+                    <button id="play-pause-btn" class="play">▶</button>
+                </div>
+            </div>
+        </div>
+        <div class="feature-area">
+            <div id="feature-viz-container">
+                <h3>Feature Activations</h3>
+                <div id="feature-viz">
+                </div>
+            </div>
+            <div id="feature-sliders-container">
+                <h3>Feature Controls</h3>
+                <div id="feature-sliders">
+                    <p class="empty-sliders-message">Click on features to add controls</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>

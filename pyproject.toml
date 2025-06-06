@@ -1,7 +1,7 @@
 [project]
 name = "saestories"
 version = "0.1.0"
-description = "Add your description here"
+description = "SAE training and controlled generation"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -10,4 +10,10 @@ dependencies = [
     "datasets>=3.5.0",
     "transformer-lens>=2.15.0",
     "sentencepiece>=0.2.0",
+    "fastapi",
+    "uvicorn",
+    "websockets",
+    "scikit-learn",
+    "numpy",
+    "umap-learn",
 ]
